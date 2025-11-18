@@ -126,30 +126,63 @@ function normalizeFields(fields) {
   return Array.from(unique);
 }
 
+async function validateQuestion(question) {
+  const body = `You are the prompt gatekeeper. Determine if the user’s query is semantically similar to the target. The language is allowed to be different. \nTarget query: "${TARGET_QUERY}"\nUser query: "${question}"\nReturn json {"similar":true|false,"score":number,"reason":"..."}. Similar if cosine ≥ 0.75. Reply with JSON only.`;
+
+  const responseText = await callGemini(buildPrompt({
+    role: 'prompt gatekeeper',
+    instruction: 'determine semantic similarity to the provided target question. respond in JSON only.',
+    body
+  }));
+
+  const result = extractJson(responseText);
+  const allowed = result.similar === true && Number(result.score) >= 0.75;
+
+  return {
+    allowed,
+    score: Number(result.score) || 0,
+    reason: result.reason || 'not similar'
+  };
+}
+
+async function runRecommendation(question, { mode = 'initial' } = {}) {
+  const revisit = mode === 'revisit';
+  const instruction = revisit
+    ? 'revisit and refine the top 3 customers to contact first using the dataset. highlight any alternate angles or risks while keeping the answer concise.'
+    : 'select the top 3 customers to contact first using the dataset. emphasise briefly the data used.';
+
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with keys "summary" (≤80 words text) and "bullets" (2-4 concise bullet reasons referencing exact fields and values).`;
+
+  const responseText = await callGemini(buildPrompt({
+    role: 'data-driven sales recommender',
+    instruction,
+    body
+  }));
+
+  const result = extractJson(responseText);
+
+  return {
+    summary: result.summary || '',
+    bullets: ensureArray(result.bullets),
+    fields: normalizeFields(result.fields)
+  };
+}
+
 app.post('/api/validate', async (req, res) => {
   const { question } = req.body || {};
   if (!question || typeof question !== 'string') {
     return res.status(400).json({ allowed: false, message: 'Question is required.' });
   }
 
-  const body = `You are the prompt gatekeeper. Determine if the user’s query is semantically similar to the target. The language is allowed to be different. \nTarget query: "${TARGET_QUERY}"\nUser query: "${question}"\nReturn json {"similar":true|false,"score":number,"reason":"..."}. Similar if cosine ≥ 0.75. Reply with JSON only.`;
-
   try {
-    const responseText = await callGemini(buildPrompt({
-      role: 'prompt gatekeeper',
-      instruction: 'determine semantic similarity to the provided target question. respond in JSON only.',
-      body
-    }));
+    const result = await validateQuestion(question);
 
-    const result = extractJson(responseText);
-    const allowed = result.similar === true && Number(result.score) >= 0.75;
-
-    if (!allowed) {
+    if (!result.allowed) {
       return res.json({
         allowed: false,
         message: 'Not able to reply to your question, please only ask questions related to the case.',
-        score: result.score || 0,
-        reason: result.reason || 'not similar'
+        score: result.score,
+        reason: result.reason
       });
     }
 
@@ -166,26 +199,61 @@ app.post('/api/agent1', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with keys "summary" (≤80 words text) and "bullets" (2-4 concise bullet reasons referencing exact fields and values).`;
-
   try {
-    const responseText = await callGemini(buildPrompt({
-      role: 'data-driven sales recommender',
-      instruction: 'select the top 3 customers to contact first using the dataset. emphasise briefly the data used.',
-      body
-    }));
-
-    const result = extractJson(responseText);
-    const payload = {
-      summary: result.summary || '',
-      bullets: ensureArray(result.bullets),
-      fields: normalizeFields(result.fields)
-    };
+    const payload = await runRecommendation(question, { mode: 'initial' });
 
     return res.json(payload);
   } catch (error) {
     console.error('Agent 1 error', error);
     return res.status(500).json({ message: 'Agent 1 failed.' });
+  }
+});
+
+app.post('/api/system-flow', async (req, res) => {
+  const { question } = req.body || {};
+  if (!question || typeof question !== 'string') {
+    return res.status(400).json({ message: 'Question is required.' });
+  }
+
+  try {
+    const validation = await validateQuestion(question);
+
+    if (!validation.allowed) {
+      return res.json({
+        allowed: false,
+        message: 'Not able to reply to your question, please only ask questions related to the case.',
+        score: validation.score,
+        reason: validation.reason
+      });
+    }
+
+    const initial = await runRecommendation(question, { mode: 'initial' });
+    const revisit = await runRecommendation(question, { mode: 'revisit' });
+
+    return res.json({
+      allowed: true,
+      validation: {
+        score: validation.score,
+        reason: validation.reason
+      },
+      reactions: [
+        {
+          step: 'reaction1',
+          message: `Here’s my initial suggestion for "${question}": ${initial.summary}`,
+          bullets: initial.bullets,
+          fields: initial.fields
+        },
+        {
+          step: 'reaction2',
+          message: `Upon further consideration, ${revisit.summary}`,
+          bullets: revisit.bullets,
+          fields: revisit.fields
+        }
+      ]
+    });
+  } catch (error) {
+    console.error('System flow error', error);
+    return res.status(500).json({ message: 'System flow failed.' });
   }
 });
 

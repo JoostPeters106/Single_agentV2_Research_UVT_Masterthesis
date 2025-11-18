@@ -6,6 +6,7 @@ This project provides a minimal, production-ready web application for an academi
 
 - **Validator Gate**: Confirms the user prompt is aligned with the case before any model call.
 - **Agent Timeline**: Transparent cards that show the validation status and the recommender's response.
+- **Two-Step Reactions**: A combined endpoint now delivers an initial suggestion and a reconsidered follow-up once the prompt is approved.
 - **Dataset Visibility**: Toggleable 10×12 customer dataset used for reasoning.
 - **Model Abstraction**: Central helper injects the required system context and calls the Google Generative Language API.
 - **Fairness & Transparency**: Every response cites the exact fields used.
@@ -85,6 +86,7 @@ The compose file expects a `.env` file in the project root for configuration.
 
 - `POST /api/validate` — semantic safety check for user prompts.
 - `POST /api/agent1` — initial recommendation agent.
+- `POST /api/system-flow` — runs validation then returns both reaction messages when the prompt matches the case.
 - `GET /api/customers` — returns the dataset for the UI.
 - `GET /api/health` — health check endpoint.
 
