@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brightwave Sales Prioritization Lab</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="agents-header">
+        <div class="header-bar">
+          <div class="title-block">
+            <h1>Brightwave Sales</h1>
+          </div>
+          <button id="restartFlow" class="restart-button" type="button" aria-label="Restart the current conversation">
+            <span class="restart-icon" aria-hidden="true">&#x21BB;</span>
+            <span class="restart-label">Restart</span>
+          </button>
+        </div>
+        <div class="bios">
+          <article class="bio agent1">
+            <div class="bio-badge">Sales Agent 1</div>
+            <h2>Recommender</h2>
+            <p>Suggests potential customers based on data</p>
+          </article>
+        </div>
+      </header>
+
+      <div class="main">
+        <main id="chat-shell">
+          <section id="chat-thread" aria-live="polite" aria-busy="false"></section>
+
+          <form id="chat-bar">
+            <textarea
+              id="chat-input"
+              rows="1"
+              maxlength="300"
+              placeholder="Determine which customers should be contacted first."
+            ></textarea>
+            <button id="chat-send" type="submit">Submit</button>
+          </form>
+        </main>
+      </div>
+    </div>
+    <script src="app.js" defer></script>
+  </body>
+</html>

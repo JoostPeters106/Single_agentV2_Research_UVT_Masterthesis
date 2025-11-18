@@ -8,7 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 3001;
-const DEFAULT_GEMINI_API_KEY = 'API-Key';
+const DEFAULT_GEMINI_API_KEY = 'AIzaSyCTlj3dAQhitOJnhq_KHAurvC5QDsrVaJU';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
