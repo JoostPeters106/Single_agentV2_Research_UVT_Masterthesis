@@ -1,0 +1,12 @@
+version: '3.9'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      BASE_URL: ${BASE_URL:-https://generativelanguage.googleapis.com}
+      MODEL: ${MODEL:-gemini-2.5-flash}
+      PORT: ${PORT:-3000}
+    restart: unless-stopped
