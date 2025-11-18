@@ -105,40 +105,41 @@ async function executeFlow() {
   autoSizeChatInput();
 
   resetChat();
-  const clearValidation = addSystemMessage('Validating question…', { ephemeral: true });
+  const clearValidation = addSystemMessage('Checking prompt match…', { ephemeral: true });
   runButton.disabled = true;
   chatInput.disabled = true;
   chatThread.setAttribute('aria-busy', 'true');
 
   try {
-    const validateRes = await fetch('/api/validate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question })
-    });
+    const flow = await postJSON('/api/system-flow', { question });
+    clearValidation();
 
-    const validateData = await validateRes.json();
-
-    if (!validateRes.ok || !validateData.allowed) {
-      clearValidation();
-      addSystemMessage(validateData.message || 'Validation failed.');
+    if (!flow.allowed) {
+      addSystemMessage(flow.message || 'Not able to reply to your question, please only ask questions related to the case.');
       return;
     }
 
-    clearValidation();
-    const typing1Done = showTyping('agent1', 1);
-    const agent1 = await postJSON('/api/agent1', { question });
-    typing1Done();
-    const cappedSummary = applyWordCap(agent1.summary, 80);
-    addMessage({
-      role: 'agent1',
-      turn: 1,
-      heading: 'Recommendation',
-      reply: null,
-      summary: cappedSummary,
-      bullets: agent1.bullets,
-      allowCopy: true
+    const promptMatch = ['Prompt match confirmed'];
+    if (typeof flow?.validation?.score === 'number') {
+      promptMatch.push(`score: ${Number(flow.validation.score).toFixed(2)}`);
+    }
+    if (flow?.validation?.reason) {
+      promptMatch.push(`reason: ${flow.validation.reason}`);
+    }
+    addSystemMessage(promptMatch.join(' • '));
+
+    (flow.reactions || []).forEach((reaction, index) => {
+      const heading = reaction.step === 'reaction1' ? 'Reaction 1' : 'Reaction 2';
+      addMessage({
+        role: 'system',
+        turn: index + 1,
+        heading,
+        summary: reaction.message,
+        bullets: reaction.bullets,
+        allowCopy: true
+      });
     });
+
     addSystemMessage('Flow completed successfully.');
   } catch (err) {
     console.error(err);
