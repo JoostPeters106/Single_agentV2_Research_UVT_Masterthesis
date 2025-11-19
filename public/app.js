@@ -161,6 +161,10 @@ async function executeFlow() {
   }
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function resetChat({ message } = {}) {
   chatThread.innerHTML = '';
   chatThread.setAttribute('aria-busy', 'false');
