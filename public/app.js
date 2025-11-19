@@ -130,12 +130,25 @@ async function executeFlow() {
     const agent1 = await postJSON('/api/agent1', { question });
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
+    const baseSummary = cappedSummary || 'no recommendations available at this time.';
     addMessage({
       role: 'agent1',
       turn: 1,
       heading: 'Recommendation',
       reply: null,
-      summary: cappedSummary,
+      summary: `my initial suggestion is ${baseSummary}`,
+      bullets: agent1.bullets,
+      allowCopy: true
+    });
+    const typing2Done = showTyping('agent1', 2);
+    await wait(2000);
+    typing2Done();
+    addMessage({
+      role: 'agent1',
+      turn: 2,
+      heading: 'Revisit',
+      reply: null,
+      summary: `i have revisited the case and found ${baseSummary}`,
       bullets: agent1.bullets,
       allowCopy: true
     });
@@ -149,6 +162,10 @@ async function executeFlow() {
     chatInput.disabled = false;
     chatThread.setAttribute('aria-busy', 'false');
   }
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function resetChat({ message } = {}) {
