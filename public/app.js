@@ -130,12 +130,22 @@ async function executeFlow() {
     const agent1 = await postJSON('/api/agent1', { question });
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
+    const baseSummary = cappedSummary || 'no recommendations available at this time.';
     addMessage({
       role: 'agent1',
       turn: 1,
       heading: 'Recommendation',
       reply: null,
-      summary: cappedSummary,
+      summary: `my initial suggestion is ${baseSummary}`,
+      bullets: agent1.bullets,
+      allowCopy: true
+    });
+    addMessage({
+      role: 'agent1',
+      turn: 2,
+      heading: 'Revisit',
+      reply: null,
+      summary: `i have revisited the case and found ${baseSummary}`,
       bullets: agent1.bullets,
       allowCopy: true
     });
