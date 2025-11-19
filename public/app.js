@@ -140,9 +140,6 @@ async function executeFlow() {
       bullets: agent1.bullets,
       allowCopy: true
     });
-    const typing2Done = showTyping('agent1', 2);
-    await wait(2000);
-    typing2Done();
     addMessage({
       role: 'agent1',
       turn: 2,
