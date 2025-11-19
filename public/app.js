@@ -34,14 +34,6 @@ const ROLE_INFO = {
     avatar: 'SYS',
     alignment: 'left',
     bubbleClass: 'system'
-  },
-  user: {
-    name: 'Sales Strategist',
-    role: null,
-    badgeClass: 'blue',
-    avatar: 'You',
-    alignment: 'left',
-    bubbleClass: 'user'
   }
 };
 
@@ -140,6 +132,11 @@ async function executeFlow() {
       bullets: agent1.bullets,
       allowCopy: true
     });
+    const revisitTypingDone = showTyping('agent1', 2, {
+      label: 'Sales Agent 1 · Turn 2 is revisiting the recommendation'
+    });
+    await wait(1500);
+    revisitTypingDone();
     addMessage({
       role: 'agent1',
       turn: 2,
@@ -181,7 +178,7 @@ function ensureChatReady() {
   }
 }
 
-function showTyping(role, turn) {
+function showTyping(role, turn, { label: customLabel } = {}) {
   ensureChatReady();
   chatThread.setAttribute('aria-busy', 'true');
   const info = ROLE_INFO[role];
@@ -200,8 +197,8 @@ function showTyping(role, turn) {
   const descriptor = [];
   if (info?.name) descriptor.push(info.name);
   if (turn) descriptor.push(`Turn ${turn}`);
-  const label = descriptor.length ? descriptor.join(' · ') : 'Agent';
-  bubble.textContent = `${label} is drafting`;
+  const label = customLabel || `${descriptor.length ? descriptor.join(' · ') : 'Agent'} is drafting`;
+  bubble.textContent = label;
 
   const dots = document.createElement('span');
   dots.className = 'typing-dots';
