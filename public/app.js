@@ -175,8 +175,11 @@ function summarizePriorities(bullets = []) {
 }
 
 function buildRevisitSummary(baseSummary = '', bullets = []) {
-  const prioritized = summarizePriorities(bullets);
   const trimmedSummary = baseSummary.trim();
+  const changeList = buildRevisitChanges(bullets);
+  const hasChanges = Array.isArray(changeList) && changeList.length > 0 &&
+    !changeList.every((item) => item.toLowerCase().includes('no changes'));
+  const prioritized = summarizePriorities(bullets);
 
   if (trimmedSummary && prioritized) {
     return `After revisiting the initial recommendation ("${trimmedSummary}"), keep the same priorities (${prioritized}). Any tweaks are captured in the change list.`;
