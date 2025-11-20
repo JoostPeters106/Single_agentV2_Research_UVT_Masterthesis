@@ -3,6 +3,24 @@ const runButton = document.getElementById('chat-send');
 const chatThread = document.getElementById('chat-thread');
 const chatForm = document.getElementById('chat-bar');
 const restartButton = document.getElementById('restartFlow');
+const customerDataset = { records: [], names: [] };
+const datasetReady = loadCustomers();
+
+async function loadCustomers() {
+  try {
+    const res = await fetch('/api/customers');
+    if (!res.ok) return;
+    const data = await res.json();
+    const records = Array.isArray(data.records) ? data.records : [];
+    customerDataset.records = records;
+    customerDataset.names = records
+      .map((record) => record['Company Name'])
+      .filter(Boolean)
+      .map((name) => name.trim());
+  } catch (err) {
+    console.warn('Failed to load customers', err);
+  }
+}
 
 function scrollChatToBottom(options = {}) {
   if (!chatThread) return;
@@ -86,6 +104,7 @@ function autoSizeChatInput() {
 }
 
 async function executeFlow() {
+  await datasetReady;
   const question = chatInput.value.trim();
 
   if (!question) {
@@ -123,7 +142,7 @@ async function executeFlow() {
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
     const baseSummary = cappedSummary || 'no recommendations available at this time.';
-    const revisitBullets = buildRevisitChanges(agent1.bullets, baseSummary);
+    const revisitBullets = buildRevisitChanges(agent1.bullets, baseSummary, customerDataset);
     const revisitSummary = applyWordCap(
       buildRevisitSummary(baseSummary, agent1.bullets, revisitBullets),
       80
@@ -183,8 +202,13 @@ function buildRevisitSummary(baseSummary = '', bullets = [], changeList) {
   const hasChanges = changeListSafe.length > 0 &&
     !changeListSafe.every((item) => item.toLowerCase().includes('no changes'));
   const prioritized = summarizePriorities(bullets);
+  const swapDetail = extractSwapDetails(changeListSafe[0]);
 
   if (trimmedSummary && hasChanges) {
+    if (swapDetail) {
+      const detail = swapDetail.reason ? ` ${swapDetail.reason}` : '';
+      return `After revisiting the recommendation, replace ${swapDetail.from} with ${swapDetail.to} to strengthen outreach.${detail}`;
+    }
     const detail = prioritized ? ` Key adjustments touch on ${prioritized}.` : '';
     return `After revisiting the recommendation, keep it intact but apply the change list to sharpen execution.${detail}`;
   }
@@ -197,78 +221,96 @@ function buildRevisitSummary(baseSummary = '', bullets = [], changeList) {
   return 'Revisit complete: the prior recommendation stands without changes.';
 }
 
+function extractSwapDetails(changeText = '') {
+  if (!changeText) return null;
+  const swapMatch = changeText.match(/(?:Swap|Replace)\s+([^\s]+(?:\s[^\s]+)*)\s+(?:for|with)\s+([^\s]+(?:\s[^\s.]+)*)/i);
+  if (!swapMatch) return null;
+  const [, fromRaw, toRaw] = swapMatch;
+  const from = fromRaw.trim();
+  const to = toRaw.trim();
+  const reasonMatch = changeText.match(/because\s+(.+?)(?:\.|$)/i);
+  const reason = reasonMatch ? reasonMatch[1].trim() : '';
+  return { from, to, reason };
+}
+
 function buildRevisitChanges(bullets = [], baseSummary = '') {
   const bulletList = Array.isArray(bullets) ? bullets.filter(Boolean) : [];
-  const changes = bulletList.reduce((list, item) => {
-    const suggestion = formatChangeSuggestion(item, list.length + 1, baseSummary);
-    if (suggestion) list.push(suggestion);
-    return list;
-  }, []);
+  const recommended = extractRecommendedCustomers(bulletList, baseSummary, customerDataset.names);
+  const swapPlan = proposeCustomerSwap(recommended, customerDataset.records);
 
-  if (changes.length) {
-    return changes;
+  if (swapPlan) {
+    const changeDetail = buildSwapChangeText(swapPlan);
+    return [`Change 1: ${changeDetail}`];
   }
 
-  return buildFallbackChange(baseSummary);
+  const fallbackSwap = buildFallbackSwap(customerDataset.records);
+  return [`Change 1: ${fallbackSwap}`];
 }
 
-function formatChangeSuggestion(item = '', index, baseSummary = '') {
-  const cleaned = item.replace(/^[\s•\-\d.]+/, '').trim();
-  if (!cleaned) {
-    return index ? `Change ${index}: Clarify this part of the recommendation.` : null;
-  }
-
-  const overlap = baseSummary && baseSummary.toLowerCase().includes(cleaned.toLowerCase());
-  if (isMeaningfulChange(cleaned, baseSummary)) {
-    const directive = buildDirective(cleaned);
-    return `Change ${index}: ${directive}`;
-  }
-
-  if (!overlap) {
-    const additive = buildAdditiveAdjustment(cleaned);
-    return `Change ${index}: ${additive}`;
-  }
-
-  return null;
+function extractRecommendedCustomers(bullets = [], baseSummary = '', knownNames = []) {
+  const textPool = [baseSummary, ...bullets].filter(Boolean).join(' ').toLowerCase();
+  if (!textPool || !knownNames.length) return [];
+  return knownNames.filter((name) => textPool.includes(name.toLowerCase()));
 }
 
-function buildFallbackChange(baseSummary = '') {
-  const directive = buildAdditiveAdjustment(
-    baseSummary || 'Add one concrete improvement to strengthen the recommendation.'
-  );
-  return [`Change 1: ${directive}`];
-}
+function proposeCustomerSwap(recommendedNames = [], records = []) {
+  if (!records.length) return null;
 
-function isMeaningfulChange(text = '', baseSummary = '') {
-  const normalized = text.toLowerCase();
-  const summaryOverlap = baseSummary && baseSummary.toLowerCase().includes(normalized);
-  const changeVerbs = [
-    'change', 'adjust', 'modify', 'update', 'revise', 'alter', 'shift', 'swap', 'replace',
-    'instead', 'add', 'remove', 'reduce', 'increase', 'decrease', 'improve', 'refine',
-    'tighten', 'expand', 'simplify', 'prioritize', 'focus', 'ensure', 'consider', 'avoid',
-    'emphasize', 'highlight', 'rebalance', 'redirect', 'optimize'
-  ];
+  const recommendedSet = new Set(recommendedNames);
+  const scoredRecords = records.map((record) => ({
+    name: record['Company Name'],
+    ytd: parseEuro(record['YTD Purchase Amount (€)']),
+    growth: parseFloat(record['Yearly Revenue Growth Rate (%)']) || 0,
+    record
+  })).filter((item) => item.name);
 
-  return !summaryOverlap && changeVerbs.some((keyword) => normalized.includes(keyword));
-}
+  const currentTarget = recommendedNames.find((name) => name) || scoredRecords[0]?.name;
+  const replacementPool = scoredRecords
+    .filter((item) => item.name !== currentTarget && !recommendedSet.has(item.name))
+    .sort((a, b) => (b.ytd || 0) - (a.ytd || 0) || (b.growth || 0) - (a.growth || 0));
 
-function buildDirective(text = '') {
-  const trimmed = text.replace(/\.+$/, '').trim();
-  const lowerStart = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
-  if (/^(consider|focus on|prioritize|ensure|avoid|add|remove|reduce|increase|decrease|shift|expand|tighten|simplify|clarify|emphasize|highlight)/i.test(trimmed)) {
-    return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
+  const replacement = replacementPool[0];
+  if (!currentTarget || !replacement) return null;
+
+  const currentRecord = scoredRecords.find((item) => item.name === currentTarget);
+  const reasonParts = [];
+  if (replacement.ytd && (!currentRecord || replacement.ytd > (currentRecord.ytd || 0))) {
+    reasonParts.push(`higher YTD spend (€${formatCurrency(replacement.ytd)}` +
+      (currentRecord && currentRecord.ytd ? ` vs €${formatCurrency(currentRecord.ytd)}` : '') + ')');
   }
-  return `Refine the plan to address ${lowerStart}.`;
+  if (replacement.growth && (!currentRecord || replacement.growth > (currentRecord.growth || 0))) {
+    reasonParts.push(`stronger growth (${replacement.growth}% vs ${currentRecord?.growth || 'prior pick'})`);
+  }
+
+  const reason = reasonParts.length ? ` because of ${reasonParts.join(' and ')}` : '';
+  return { from: currentTarget, to: replacement.name, reason };
 }
 
-function buildAdditiveAdjustment(text = '') {
-  const trimmed = text.replace(/\.+$/, '').trim();
-  if (!trimmed) return 'Add one concrete improvement that strengthens the pitch.';
-  const lowerStart = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
-  if (/^(add|include|layer|introduce|pair|bundle|offer|provide)/i.test(trimmed)) {
-    return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
+function buildSwapChangeText({ from, to, reason } = {}) {
+  const detail = reason ? `${reason}.` : ' to target a stronger opportunity.';
+  return `Replace ${from} with ${to}${detail}`;
+}
+
+function buildFallbackSwap(records = []) {
+  if (!records.length) {
+    return 'Replace one existing customer with a higher-potential name from the dataset to ensure a tangible change.';
   }
-  return `Add a tangible upgrade or incentive that focuses on ${lowerStart}.`;
+  const first = records[0]?.['Company Name'];
+  const alt = records[1]?.['Company Name'] || records[0]?.['Company Name'];
+  if (!first || !alt) {
+    return 'Swap a current pick for another customer in the dataset to introduce a concrete change.';
+  }
+  return `Replace ${first} with ${alt} to introduce a clear customer change.`;
+}
+
+function parseEuro(value = '') {
+  if (!value) return 0;
+  const numeric = String(value).replace(/[^\d.,-]/g, '').replace(/,/g, '.');
+  return parseFloat(numeric) || 0;
+}
+
+function formatCurrency(amount = 0) {
+  return amount.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 function resetChat({ message } = {}) {
