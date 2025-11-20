@@ -254,22 +254,13 @@ function extractRecommendedCustomers(bullets = [], baseSummary = '', knownNames 
 }
 
 function proposeCustomerSwap(recommendedNames = [], records = []) {
-  if (!records.length) return null;
+  const scoredRecords = scoreAndSortRecords(records);
+  if (!scoredRecords.length) return null;
 
   const recommendedSet = new Set(recommendedNames);
-  const scoredRecords = records.map((record) => ({
-    name: record['Company Name'],
-    ytd: parseEuro(record['YTD Purchase Amount (€)']),
-    growth: parseFloat(record['Yearly Revenue Growth Rate (%)']) || 0,
-    record
-  })).filter((item) => item.name);
-
   const currentTarget = recommendedNames.find((name) => name) || scoredRecords[0]?.name;
-  const replacementPool = scoredRecords
-    .filter((item) => item.name !== currentTarget && !recommendedSet.has(item.name))
-    .sort((a, b) => (b.ytd || 0) - (a.ytd || 0) || (b.growth || 0) - (a.growth || 0));
+  const replacement = scoredRecords.find((item) => item.name !== currentTarget && !recommendedSet.has(item.name));
 
-  const replacement = replacementPool[0];
   if (!currentTarget || !replacement) return null;
 
   const currentRecord = scoredRecords.find((item) => item.name === currentTarget);
@@ -292,15 +283,37 @@ function buildSwapChangeText({ from, to, reason } = {}) {
 }
 
 function buildFallbackSwap(records = []) {
-  if (!records.length) {
+  const scoredRecords = scoreAndSortRecords(records);
+  if (!scoredRecords.length) {
     return 'Replace one existing customer with a higher-potential name from the dataset to ensure a tangible change.';
   }
-  const first = records[0]?.['Company Name'];
-  const alt = records[1]?.['Company Name'] || records[0]?.['Company Name'];
-  if (!first || !alt) {
-    return 'Swap a current pick for another customer in the dataset to introduce a concrete change.';
+
+  const [topPick, runnerUp] = scoredRecords;
+  if (topPick && runnerUp) {
+    const reasonParts = [];
+    if (runnerUp.ytd && runnerUp.ytd !== topPick.ytd) {
+      reasonParts.push(`higher YTD spend (€${formatCurrency(runnerUp.ytd)}` +
+        (topPick.ytd ? ` vs €${formatCurrency(topPick.ytd)}` : '') + ')');
+    }
+    if (runnerUp.growth && runnerUp.growth !== topPick.growth) {
+      reasonParts.push(`growth upside (${runnerUp.growth}% vs ${topPick.growth || 'prior pick'})`);
+    }
+    const reason = reasonParts.length ? ` because of ${reasonParts.join(' and ')}` : '';
+    return `Replace ${topPick.name} with ${runnerUp.name}${reason}.`;
   }
-  return `Replace ${first} with ${alt} to introduce a clear customer change.`;
+
+  return `Replace ${topPick.name} with another high-potential customer from the dataset to introduce a clear change.`;
+}
+
+function scoreAndSortRecords(records = []) {
+  return (Array.isArray(records) ? records : [])
+    .map((record) => ({
+      name: record['Company Name'],
+      ytd: parseEuro(record['YTD Purchase Amount (€)']),
+      growth: parseFloat(record['Yearly Revenue Growth Rate (%)']) || 0
+    }))
+    .filter((item) => item.name)
+    .sort((a, b) => (b.ytd || 0) - (a.ytd || 0) || (b.growth || 0) - (a.growth || 0));
 }
 
 function parseEuro(value = '') {
