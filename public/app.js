@@ -124,6 +124,7 @@ async function executeFlow() {
     const cappedSummary = applyWordCap(agent1.summary, 80);
     const baseSummary = cappedSummary || 'no recommendations available at this time.';
     const revisitSummary = buildRevisitSummary(baseSummary, agent1.bullets);
+    const revisitBullets = buildRevisitChanges(agent1.bullets);
     addMessage({
       role: 'agent1',
       turn: 1,
@@ -144,7 +145,7 @@ async function executeFlow() {
       heading: 'Revisit',
       reply: null,
       summary: revisitSummary,
-      bullets: agent1.bullets,
+      bullets: revisitBullets,
       allowCopy: true
     });
     addSystemMessage('Flow completed successfully.');
@@ -177,15 +178,25 @@ function buildRevisitSummary(baseSummary = '', bullets = []) {
   const prioritized = summarizePriorities(bullets);
   const trimmedSummary = baseSummary.trim();
 
-  if (prioritized) {
-    const prefix = trimmedSummary
-      ? `Revisiting the first suggestion ("${trimmedSummary}"), the data still points to ${prioritized}`
-      : `After reflecting on the data, ${prioritized} remain the strongest candidates`;
+  if (trimmedSummary && prioritized) {
+    return `After revisiting the initial recommendation ("${trimmedSummary}"), keep the same priorities (${prioritized}). Any tweaks are captured in the change list.`;
   }
   if (trimmedSummary) {
-    return `after reassessing the initial recommendation ("${trimmedSummary}"), stay with that prioritization because it best fits the evidence.`;
+    return `After reviewing the initial recommendation ("${trimmedSummary}"), keep it as-is; only minor adjustments are noted below.`;
   }
-  return 'after reflecting on the available data, continue with the suggested priorities.';
+  if (prioritized) {
+    return `Revisiting the advice, keep focusing on ${prioritized}. Any refinements are noted below.`;
+  }
+  return 'After reviewing the prior recommendation, keep it steady. Suggested adjustments are listed below.';
+}
+
+function buildRevisitChanges(bullets = []) {
+  const bulletList = Array.isArray(bullets) ? bullets.filter(Boolean) : [];
+  if (!bulletList.length) {
+    return ['No changes suggested; keep the original recommendation.'];
+  }
+
+  return bulletList.map((item, index) => `Keep priority ${index + 1} but refine it as: ${item}`);
 }
 
 function resetChat({ message } = {}) {
