@@ -218,16 +218,24 @@ function formatChangeSuggestion(item = '', index, baseSummary = '') {
     return index ? `Change ${index}: Clarify this part of the recommendation.` : null;
   }
 
-  if (!isMeaningfulChange(cleaned, baseSummary)) {
-    return null;
+  const overlap = baseSummary && baseSummary.toLowerCase().includes(cleaned.toLowerCase());
+  if (isMeaningfulChange(cleaned, baseSummary)) {
+    const directive = buildDirective(cleaned);
+    return `Change ${index}: ${directive}`;
   }
 
-  const directive = buildDirective(cleaned);
-  return `Change ${index}: ${directive}`;
+  if (!overlap) {
+    const additive = buildAdditiveAdjustment(cleaned);
+    return `Change ${index}: ${additive}`;
+  }
+
+  return null;
 }
 
 function buildFallbackChange(baseSummary = '') {
-  const directive = buildDirective(baseSummary || 'Add one concrete improvement to strengthen the recommendation.');
+  const directive = buildAdditiveAdjustment(
+    baseSummary || 'Add one concrete improvement to strengthen the recommendation.'
+  );
   return [`Change 1: ${directive}`];
 }
 
@@ -251,6 +259,16 @@ function buildDirective(text = '') {
     return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
   }
   return `Refine the plan to address ${lowerStart}.`;
+}
+
+function buildAdditiveAdjustment(text = '') {
+  const trimmed = text.replace(/\.+$/, '').trim();
+  if (!trimmed) return 'Add one concrete improvement that strengthens the pitch.';
+  const lowerStart = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+  if (/^(add|include|layer|introduce|pair|bundle|offer|provide)/i.test(trimmed)) {
+    return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
+  }
+  return `Add a tangible upgrade or incentive that focuses on ${lowerStart}.`;
 }
 
 function resetChat({ message } = {}) {
