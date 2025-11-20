@@ -199,19 +199,17 @@ function buildRevisitSummary(baseSummary = '', bullets = [], changeList) {
 
 function buildRevisitChanges(bullets = [], baseSummary = '') {
   const bulletList = Array.isArray(bullets) ? bullets.filter(Boolean) : [];
-  if (!bulletList.length) {
-    return ['No changes suggested; keep the original recommendation.'];
+  const changes = bulletList.reduce((list, item) => {
+    const suggestion = formatChangeSuggestion(item, list.length + 1, baseSummary);
+    if (suggestion) list.push(suggestion);
+    return list;
+  }, []);
+
+  if (changes.length) {
+    return changes;
   }
 
-  const changes = bulletList
-    .map((item, index) => formatChangeSuggestion(item, index + 1, baseSummary))
-    .filter(Boolean);
-
-  if (!changes.length) {
-    return ['No changes suggested; keep the original recommendation.'];
-  }
-
-  return changes;
+  return buildFallbackChange(baseSummary);
 }
 
 function formatChangeSuggestion(item = '', index, baseSummary = '') {
@@ -226,6 +224,11 @@ function formatChangeSuggestion(item = '', index, baseSummary = '') {
 
   const directive = buildDirective(cleaned);
   return `Change ${index}: ${directive}`;
+}
+
+function buildFallbackChange(baseSummary = '') {
+  const directive = buildDirective(baseSummary || 'Add one concrete improvement to strengthen the recommendation.');
+  return [`Change 1: ${directive}`];
 }
 
 function isMeaningfulChange(text = '', baseSummary = '') {
