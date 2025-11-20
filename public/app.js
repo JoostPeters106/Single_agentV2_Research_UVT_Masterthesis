@@ -129,7 +129,7 @@ async function executeFlow() {
       turn: 1,
       heading: 'Recommendation',
       reply: null,
-      summary: `my initial suggestion is ${baseSummary}`,
+      summary: `My initial suggestion is ${baseSummary}`,
       bullets: agent1.bullets,
       allowCopy: true
     });
@@ -179,9 +179,8 @@ function buildRevisitSummary(baseSummary = '', bullets = []) {
 
   if (prioritized) {
     const prefix = trimmedSummary
-      ? `revisiting the first pass ("${trimmedSummary}"), the data still points to ${prioritized}`
-      : `after reflecting on the data, ${prioritized} remain the strongest candidates`;
-    return `${prefix}. conclude with this order based on the reviewed fields.`;
+      ? `Revisiting the first suggestion ("${trimmedSummary}"), the data still points to ${prioritized}`
+      : `After reflecting on the data, ${prioritized} remain the strongest candidates`;
   }
   if (trimmedSummary) {
     return `after reassessing the initial recommendation ("${trimmedSummary}"), stay with that prioritization because it best fits the evidence.`;
