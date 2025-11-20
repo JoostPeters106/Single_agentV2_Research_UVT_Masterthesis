@@ -123,7 +123,11 @@ async function executeFlow() {
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
     const baseSummary = cappedSummary || 'no recommendations available at this time.';
-    const revisitSummary = buildRevisitSummary(baseSummary, agent1.bullets);
+    const revisitBullets = buildRevisitChanges(agent1.bullets, baseSummary);
+    const revisitSummary = applyWordCap(
+      buildRevisitSummary(baseSummary, agent1.bullets, revisitBullets),
+      80
+    );
     addMessage({
       role: 'agent1',
       turn: 1,
@@ -144,7 +148,7 @@ async function executeFlow() {
       heading: 'Revisit',
       reply: null,
       summary: revisitSummary,
-      bullets: agent1.bullets,
+      bullets: revisitBullets,
       allowCopy: true
     });
     addSystemMessage('Flow completed successfully.');
@@ -173,19 +177,80 @@ function summarizePriorities(bullets = []) {
   return `${head} and ${tail}`;
 }
 
-function buildRevisitSummary(baseSummary = '', bullets = []) {
-  const prioritized = summarizePriorities(bullets);
+function buildRevisitSummary(baseSummary = '', bullets = [], changeList) {
   const trimmedSummary = baseSummary.trim();
+  const changeListSafe = Array.isArray(changeList) ? changeList : buildRevisitChanges(bullets, baseSummary);
+  const hasChanges = changeListSafe.length > 0 &&
+    !changeListSafe.every((item) => item.toLowerCase().includes('no changes'));
+  const prioritized = summarizePriorities(bullets);
 
-  if (prioritized) {
-    const prefix = trimmedSummary
-      ? `Revisiting the first suggestion ("${trimmedSummary}"), the data still points to ${prioritized}`
-      : `After reflecting on the data, ${prioritized} remain the strongest candidates`;
+  if (trimmedSummary && hasChanges) {
+    const detail = prioritized ? ` Key adjustments touch on ${prioritized}.` : '';
+    return `After revisiting the recommendation, keep it intact but apply the change list to sharpen execution.${detail}`;
   }
   if (trimmedSummary) {
-    return `after reassessing the initial recommendation ("${trimmedSummary}"), stay with that prioritization because it best fits the evidence.`;
+    return 'After reviewing the recommendation, it remains solid and should stay the same; no changes are necessary.';
   }
-  return 'after reflecting on the available data, continue with the suggested priorities.';
+  if (hasChanges) {
+    return 'Revisit complete: the original advice stands, with targeted adjustments listed below to strengthen it.';
+  }
+  return 'Revisit complete: the prior recommendation stands without changes.';
+}
+
+function buildRevisitChanges(bullets = [], baseSummary = '') {
+  const bulletList = Array.isArray(bullets) ? bullets.filter(Boolean) : [];
+  const changes = bulletList.reduce((list, item) => {
+    const suggestion = formatChangeSuggestion(item, list.length + 1, baseSummary);
+    if (suggestion) list.push(suggestion);
+    return list;
+  }, []);
+
+  if (changes.length) {
+    return changes;
+  }
+
+  return buildFallbackChange(baseSummary);
+}
+
+function formatChangeSuggestion(item = '', index, baseSummary = '') {
+  const cleaned = item.replace(/^[\s•\-\d.]+/, '').trim();
+  if (!cleaned) {
+    return index ? `Change ${index}: Clarify this part of the recommendation.` : null;
+  }
+
+  if (!isMeaningfulChange(cleaned, baseSummary)) {
+    return null;
+  }
+
+  const directive = buildDirective(cleaned);
+  return `Change ${index}: ${directive}`;
+}
+
+function buildFallbackChange(baseSummary = '') {
+  const directive = buildDirective(baseSummary || 'Add one concrete improvement to strengthen the recommendation.');
+  return [`Change 1: ${directive}`];
+}
+
+function isMeaningfulChange(text = '', baseSummary = '') {
+  const normalized = text.toLowerCase();
+  const summaryOverlap = baseSummary && baseSummary.toLowerCase().includes(normalized);
+  const changeVerbs = [
+    'change', 'adjust', 'modify', 'update', 'revise', 'alter', 'shift', 'swap', 'replace',
+    'instead', 'add', 'remove', 'reduce', 'increase', 'decrease', 'improve', 'refine',
+    'tighten', 'expand', 'simplify', 'prioritize', 'focus', 'ensure', 'consider', 'avoid',
+    'emphasize', 'highlight', 'rebalance', 'redirect', 'optimize'
+  ];
+
+  return !summaryOverlap && changeVerbs.some((keyword) => normalized.includes(keyword));
+}
+
+function buildDirective(text = '') {
+  const trimmed = text.replace(/\.+$/, '').trim();
+  const lowerStart = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+  if (/^(consider|focus on|prioritize|ensure|avoid|add|remove|reduce|increase|decrease|shift|expand|tighten|simplify|clarify|emphasize|highlight)/i.test(trimmed)) {
+    return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
+  }
+  return `Refine the plan to address ${lowerStart}.`;
 }
 
 function resetChat({ message } = {}) {
