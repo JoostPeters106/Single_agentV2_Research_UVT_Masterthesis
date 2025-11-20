@@ -123,6 +123,7 @@ async function executeFlow() {
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
     const baseSummary = cappedSummary || 'no recommendations available at this time.';
+    const revisitSummary = buildRevisitSummary(baseSummary, agent1.bullets);
     addMessage({
       role: 'agent1',
       turn: 1,
@@ -142,7 +143,7 @@ async function executeFlow() {
       turn: 2,
       heading: 'Revisit',
       reply: null,
-      summary: `i have revisited the case and found ${baseSummary}`,
+      summary: revisitSummary,
       bullets: agent1.bullets,
       allowCopy: true
     });
@@ -160,6 +161,32 @@ async function executeFlow() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function summarizePriorities(bullets = []) {
+  const items = Array.isArray(bullets) ? bullets.filter(Boolean).slice(0, 3) : [];
+  if (!items.length) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  const head = items.slice(0, -1).join(', ');
+  const tail = items[items.length - 1];
+  return `${head} and ${tail}`;
+}
+
+function buildRevisitSummary(baseSummary = '', bullets = []) {
+  const prioritized = summarizePriorities(bullets);
+  const trimmedSummary = baseSummary.trim();
+
+  if (prioritized) {
+    const prefix = trimmedSummary
+      ? `revisiting the first pass ("${trimmedSummary}"), the data still points to ${prioritized}`
+      : `after reflecting on the data, ${prioritized} remain the strongest candidates`;
+    return `${prefix}. conclude with this order based on the reviewed fields.`;
+  }
+  if (trimmedSummary) {
+    return `after reassessing the initial recommendation ("${trimmedSummary}"), stay with that prioritization because it best fits the evidence.`;
+  }
+  return 'after reflecting on the available data, continue with the suggested priorities.';
 }
 
 function resetChat({ message } = {}) {
