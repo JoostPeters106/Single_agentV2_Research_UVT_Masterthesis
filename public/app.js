@@ -162,13 +162,17 @@ async function executeFlow() {
       });
       revisitTypingDone();
       revisitSucceeded = true;
+      const changeBullets = Array.isArray(revisit.changes) && revisit.changes.length
+        ? revisit.changes.map((item) => `Change: ${item}`)
+        : ['Change: No adjustments needed versus the initial plan.'];
+      const finalBullets = Array.isArray(revisit.bullets) ? revisit.bullets.map((item) => `Final recommendation: ${item}`) : [];
       addMessage({
         role: 'agent1',
         turn: 2,
         heading: 'Revisit',
         reply: null,
         summary: applyWordCap(revisit.summary, 80),
-        bullets: revisit.bullets,
+        bullets: [...changeBullets, ...finalBullets],
         allowCopy: true
       });
     } catch (error) {
