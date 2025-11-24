@@ -142,11 +142,6 @@ async function executeFlow() {
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
     const baseSummary = cappedSummary || 'no recommendations available at this time.';
-    const revisitBullets = buildRevisitChanges(agent1.bullets, baseSummary, customerDataset);
-    const revisitSummary = applyWordCap(
-      buildRevisitSummary(baseSummary, agent1.bullets, revisitBullets),
-      80
-    );
     addMessage({
       role: 'agent1',
       turn: 1,
@@ -159,18 +154,35 @@ async function executeFlow() {
     const revisitTypingDone = showTyping('agent1', 2, {
       label: 'Sales Agent 1 · Turn 2 is revisiting the recommendation'
     });
-    await wait(1500);
-    revisitTypingDone();
-    addMessage({
-      role: 'agent1',
-      turn: 2,
-      heading: 'Revisit',
-      reply: null,
-      summary: revisitSummary,
-      bullets: revisitBullets,
-      allowCopy: true
-    });
-    addSystemMessage('Flow completed successfully.');
+    let revisitSucceeded = false;
+    try {
+      const revisit = await postJSON('/api/agent1/revisit', {
+        question,
+        recommendation: { summary: baseSummary, bullets: agent1.bullets }
+      });
+      revisitTypingDone();
+      revisitSucceeded = true;
+      const changeBullets = Array.isArray(revisit.changes) && revisit.changes.length
+        ? revisit.changes.map((item) => `Change: ${item}`)
+        : ['Change: No adjustments needed versus the initial plan.'];
+      const finalBullets = Array.isArray(revisit.bullets) ? revisit.bullets.map((item) => `Final recommendation: ${item}`) : [];
+      addMessage({
+        role: 'agent1',
+        turn: 2,
+        heading: 'Revisit',
+        reply: null,
+        summary: applyWordCap(revisit.summary, 80),
+        bullets: [...changeBullets, ...finalBullets],
+        allowCopy: true
+      });
+    } catch (error) {
+      console.error(error);
+      revisitTypingDone();
+      addSystemMessage('An error occurred while generating the revisit recommendation.');
+    }
+    if (revisitSucceeded) {
+      addSystemMessage('Flow completed successfully.');
+    }
   } catch (err) {
     console.error(err);
     clearValidation();
