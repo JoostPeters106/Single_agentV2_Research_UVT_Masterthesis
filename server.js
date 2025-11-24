@@ -192,6 +192,38 @@ app.post('/api/agent1', async (req, res) => {
   }
 });
 
+app.post('/api/agent1/revisit', async (req, res) => {
+  const { question, recommendation } = req.body || {};
+  const summary = (recommendation && recommendation.summary) || '';
+  const bullets = (recommendation && ensureArray(recommendation.bullets)) || [];
+
+  if (!question) {
+    return res.status(400).json({ message: 'Question is required.' });
+  }
+
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\nInitial recommendation bullets: ${bullets.join('; ')}\n\nRevisit the advice, making concise adjustments only if needed. Respond ONLY in valid JSON with keys "summary" (≤80 words) and "bullets" (2-4 concise bullet reasons referencing exact fields and values).`;
+
+  try {
+    const responseText = await callGemini(buildPrompt({
+      role: 'data-driven sales recommender',
+      instruction: 'revisit the initial plan and refine it using the dataset and user question.',
+      body
+    }));
+
+    const result = extractJson(responseText);
+    const payload = {
+      summary: result.summary || '',
+      bullets: ensureArray(result.bullets),
+      fields: normalizeFields(result.fields)
+    };
+
+    return res.json(payload);
+  } catch (error) {
+    console.error('Agent 1 revisit error', error);
+    return res.status(500).json({ message: 'Agent 1 revisit failed.' });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('*', (req, res) => {
