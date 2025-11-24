@@ -201,7 +201,7 @@ app.post('/api/agent1/revisit', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\nInitial recommendation bullets: ${bullets.join('; ')}\n\nRevisit the advice. First, list concrete changes vs the initial plan (swap/add/remove customers) using dataset fields. Then provide the final recommendation. Respond ONLY in valid JSON with keys "changes" (2-3 bullets describing adjustments vs the initial plan), "summary" (≤80 words describing the final recommendation), and "bullets" (2-4 concise bullet reasons for the final plan referencing exact fields and values).`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\nInitial recommendation bullets: ${bullets.join('; ')}\n\nRevisit the advice. First, list concrete changes vs the initial plan (swap/add/remove customers) using dataset fields. Then provide the final recommendation. Start the text with: Revisiting my earlier recommendation. Respond ONLY in valid JSON with keys "changes" (2 bullets describing only the changes made in customers for the recommendations, do not mention things kept the same), "summary" (≤80 words describing the final recommendation, starting with: Revisiting my earlier recommendation...), and "bullets" (1 concise bullet reasons for the final plan referencing only the names of the customers).`;
 
   try {
     const responseText = await callGemini(buildPrompt({
