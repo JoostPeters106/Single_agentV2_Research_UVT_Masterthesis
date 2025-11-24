@@ -56,9 +56,12 @@ let datasetText = '';
 
 try {
   datasetText = fs.readFileSync(dataPath, 'utf8');
+  datasetText = datasetText.replace(/^\uFEFF/, '');
   customers = parse(datasetText, {
     columns: true,
-    skip_empty_lines: true
+    skip_empty_lines: true,
+    delimiter: ';',
+    bom: true
   });
   customerColumns = customers.length > 0 ? Object.keys(customers[0]) : [];
 } catch (err) {
