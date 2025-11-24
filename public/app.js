@@ -240,11 +240,13 @@ function buildRevisitChanges(bullets = [], baseSummary = '') {
 
   if (swapPlan) {
     const changeDetail = buildSwapChangeText(swapPlan);
-    return [`Change 1: ${changeDetail}`];
+    const contactPlan = buildContactPlan(recommended, swapPlan, customerDataset.records);
+    return [`Change 1: ${changeDetail}`, contactPlan];
   }
 
   const fallbackSwap = buildFallbackSwap(customerDataset.records);
-  return [`Change 1: ${fallbackSwap}`];
+  const contactPlan = buildContactPlan(recommended, null, customerDataset.records);
+  return [`Change 1: ${fallbackSwap}`, contactPlan];
 }
 
 function extractRecommendedCustomers(bullets = [], baseSummary = '', knownNames = []) {
@@ -280,6 +282,34 @@ function proposeCustomerSwap(recommendedNames = [], records = []) {
 function buildSwapChangeText({ from, to, reason } = {}) {
   const detail = reason ? `${reason}.` : ' to target a stronger opportunity.';
   return `Replace ${from} with ${to}${detail}`;
+}
+
+function buildContactPlan(recommendedNames = [], swapPlan, records = []) {
+  const scoredRecords = scoreAndSortRecords(records);
+  const baseline = recommendedNames.length
+    ? recommendedNames.filter(Boolean)
+    : scoredRecords.slice(0, 3).map((item) => item.name);
+
+  const adjusted = baseline.map((name) =>
+    swapPlan && swapPlan.from && swapPlan.to && name === swapPlan.from ? swapPlan.to : name
+  );
+
+  if (swapPlan && swapPlan.to && !adjusted.includes(swapPlan.to)) {
+    adjusted.unshift(swapPlan.to);
+  }
+
+  const uniqueLineup = Array.from(new Set(adjusted.filter(Boolean))).slice(0, 3);
+  const contactsText = summarizePriorities(uniqueLineup);
+
+  if (!contactsText) {
+    return 'Contact the top potential customers identified in the dataset.';
+  }
+
+  if (uniqueLineup.length === 1) {
+    return `Contact ${contactsText}.`;
+  }
+
+  return `Contact customers ${contactsText}.`;
 }
 
 function buildFallbackSwap(records = []) {
