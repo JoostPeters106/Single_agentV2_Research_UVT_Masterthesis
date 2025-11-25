@@ -194,7 +194,7 @@ app.post('/api/agent1/revisit', async (req, res) => {
   try {
     const responseText = await callGemini(buildPrompt({
       role: 'data-driven sales recommender',
-      instruction: 'revisit the initial plan and refine it using the dataset and user question. IMPORTANT: At least remove one customer or add one. Do no more than adding one and removing one. Explicitly state which customer you removed and or added (use the words: removed or/and added). Shortly substentiate why ',
+      instruction: 'Revisit the initial plan and refine it using the dataset and user question. IMPORTANT: At least remove one customer or add one. Do no more than adding one and removing one. Explicitly state which customer you removed and or added (use the words: removed or/and added). Shortly substentiate why you removed or/and added a customer. Make sure you adhere to what is said at: "IMPORTANT:"',
       body
     }));
 
