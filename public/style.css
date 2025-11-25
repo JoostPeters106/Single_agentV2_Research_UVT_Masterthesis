@@ -270,6 +270,7 @@ button.ghost:hover:not(:disabled) {
   font-weight: 700;
   font-size: 0.8rem;
   color: #fff;
+  flex-shrink: 0;
 }
 
 .msg.agent .avatar {
@@ -501,6 +502,37 @@ button.ghost:hover:not(:disabled) {
   padding: 1rem 1.5rem;
   background: rgba(255, 255, 255, 0.7);
 }
+
+/* Specifieke styling voor system messages om ze minder dominant te maken */
+.msg.system .bubble {
+  background: transparent;      /* Weg met het harde wit */
+  box-shadow: none;             /* Geen schaduw meer */
+  border: 1px dashed var(--border); /* Een subtielere, dashed rand (of gebruik 'none') */
+  padding: 0.5rem 0.8rem;       /* Veel minder padding */
+  font-size: 0.85rem;           /* Iets kleinere tekst */
+}
+
+/* Zorg dat de header (waar 'System' staat) dichter op de tekst staat */
+.msg.system .bubble header {
+  margin-bottom: 0.2rem;
+}
+
+/* Optioneel: Maak de avatar ook iets kleiner en transparanter */
+.msg.system .avatar {
+  transform: scale(0.8);
+  opacity: 0.7;
+}
+
+/* Optioneel: Maak de tekstkleur iets grijzer (minder hard zwart) */
+.msg.system .bubble .body {
+  color: var(--muted);
+}
+
+/* Optioneel: Maak margins wat kleiner */
+.msg.system .bubble .body p {
+  margin: 0;
+}
+
 
 @media (max-width: 1024px) {
   .agents-header {

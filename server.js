@@ -8,7 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 3001;
-const DEFAULT_GEMINI_API_KEY = 'API';
+const DEFAULT_GEMINI_API_KEY = 'api';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -34,7 +34,7 @@ const geminiClient = apiKey && baseUrl
       },
     })
   : null;
-const SYSTEM_CONTEXT = "you are assisting in an academic experiment. the user is a sales employee at brightwave solutions. your outputs must be short (≤80 words), strictly about which customers to contact first using only the provided dataset. justify briefly using concrete fields (e.g., ‘last sale=1 mo’, ‘ytd=€400k’, ‘freq=8/yr’). avoid unrelated topics. ensure fairness; do not rely on stereotypes. be transparent and cite which fields informed your choice.";
+const SYSTEM_CONTEXT = "you are assisting in an academic experiment. the user is a sales employee at brightwave solutions. your outputs must be short (≤80 words), strictly about which customers to contact first using only the provided dataset. justify briefly using concrete fields from the data (e.g., ‘last sale=1 mo’, ‘ytd=€400k’, ‘freq=8/yr’, notes etc.). Do not mention the customerID. avoid unrelated topics. ensure fairness; do not rely on stereotypes. be transparent and cite which fields informed your choice.";
 const TARGET_QUERY = "Based on the data, determine which customers have the most potential and should be contacted first.";
 
 const app = express();
@@ -46,7 +46,7 @@ app.use((req, res, next) => {
   });
   next();
 });
-const limiter = rateLimit({ windowMs: 60 * 1000, max: 30 });
+const limiter = rateLimit({ windowMs: 60 * 1000, max: 3000 });
 app.use(limiter);
 
 const dataPath = path.join(__dirname, 'data', 'Customer_List_with_YTD_Purchases.csv');
@@ -159,7 +159,7 @@ app.post('/api/agent1', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with key "summary" (≤80 words). Provide a single concise reaction about which customers to contact first, referencing dataset fields inline without bullet points.`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with key "summary" (≤80 words). Provide a single concise reaction about which customers to contact first, referencing dataset fields inline without bullet points.  Do not mention the customerID.`;
 
   try {
     const responseText = await callGemini(buildPrompt({
@@ -189,7 +189,7 @@ app.post('/api/agent1/revisit', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\n\nRevisit the advice and provide a single, ≤90-word reaction starting with: Revisiting my earlier recommendation. Mention and substantiate any key changes inline, without bullet points. Respond ONLY in valid JSON with key "summary".`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\n\nRevisit the advice and provide a single, ≤90-word reaction starting with: Revisiting my earlier recommendation. Mention and substantiate any key changes inline, without bullet points. Do not mention the customerID. Respond ONLY in valid JSON with key "summary".`;
 
   try {
     const responseText = await callGemini(buildPrompt({
