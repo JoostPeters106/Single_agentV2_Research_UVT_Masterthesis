@@ -205,10 +205,51 @@ function normalizeCustomerName(name = '') {
     .replace(/[^a-z0-9]+/g, '');
 }
 
+const NEGATIVE_CUES = [
+  'removed',
+  'remove',
+  'remove from',
+  'dropped',
+  'drop',
+  'dropped from',
+  'exclude',
+  'excluded',
+  'eliminate',
+  'eliminated',
+  'deprioritize',
+  'deprioritized',
+  'no longer prioritize',
+  'not prioritize',
+  'not recommending',
+  'no longer recommend',
+  'no longer recommending'
+].map((cue) => normalizeCustomerName(cue));
+
 function extractCustomers(text = '') {
   if (!text) return [];
   const normalizedText = normalizeCustomerName(text);
   const seen = new Set();
+
+  const cueHits = NEGATIVE_CUES.flatMap((cue) => {
+    const hits = [];
+    let start = normalizedText.indexOf(cue);
+    while (start !== -1) {
+      hits.push(start);
+      start = normalizedText.indexOf(cue, start + cue.length);
+    }
+    return hits;
+  });
+
+  const isNegated = (canonical) => {
+    let index = normalizedText.indexOf(canonical);
+    while (index !== -1) {
+      const threshold = canonical.length + 20;
+      const isNearCue = cueHits.some((cueIndex) => Math.abs(cueIndex - index) <= threshold);
+      if (isNearCue) return true;
+      index = normalizedText.indexOf(canonical, index + canonical.length);
+    }
+    return false;
+  };
 
   return customerDataset.names
     .map((name) => ({
@@ -218,10 +259,10 @@ function extractCustomers(text = '') {
     .filter(({ canonical, display }) => {
       if (!canonical || seen.has(canonical)) return false;
       const found = normalizedText.includes(canonical);
-      if (found) {
-        seen.add(canonical);
-      }
-      return found && Boolean(display);
+      if (!found || !display) return false;
+      if (isNegated(canonical)) return false;
+      seen.add(canonical);
+      return true;
     });
 }
 
