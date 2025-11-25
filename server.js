@@ -107,19 +107,9 @@ function extractJson(text) {
   return JSON.parse(match[0]);
 }
 
-function ensureArray(value) {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return value.split(/\n|;|,/).map((v) => v.trim()).filter(Boolean);
-  }
-  return [];
-}
-
 function normalizeFields(fields) {
   const unique = new Set();
-  ensureArray(fields).forEach((field) => {
+  (Array.isArray(fields) ? fields : []).forEach((field) => {
     if (!field) return;
     const cleaned = field.replace(/[`*]/g, '').trim();
     if (cleaned) {
@@ -169,7 +159,7 @@ app.post('/api/agent1', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with keys "summary" (≤80 words text) and "bullets" (2-4 concise bullet reasons referencing exact fields and values).`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with key "summary" (≤80 words). Provide a single concise reaction about which customers to contact first, referencing dataset fields inline without bullet points.`;
 
   try {
     const responseText = await callGemini(buildPrompt({
@@ -181,7 +171,6 @@ app.post('/api/agent1', async (req, res) => {
     const result = extractJson(responseText);
     const payload = {
       summary: result.summary || '',
-      bullets: ensureArray(result.bullets),
       fields: normalizeFields(result.fields)
     };
 
@@ -195,13 +184,12 @@ app.post('/api/agent1', async (req, res) => {
 app.post('/api/agent1/revisit', async (req, res) => {
   const { question, recommendation } = req.body || {};
   const summary = (recommendation && recommendation.summary) || '';
-  const bullets = (recommendation && ensureArray(recommendation.bullets)) || [];
 
   if (!question) {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\nInitial recommendation bullets: ${bullets.join('; ')}\n\nRevisit the advice. First, list concrete changes vs the initial plan (swap/add/remove customers) using dataset fields. Then provide the final recommendation. Start the text with: Revisiting my earlier recommendation. Respond ONLY in valid JSON with keys "changes" (2 bullets describing only the changes made in customers for the recommendations, do not mention things kept the same), "summary" (≤80 words describing the final recommendation, starting with: Revisiting my earlier recommendation...), and "bullets" (1 concise bullet reasons for the final plan referencing only the names of the customers).`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\n\nRevisit the advice and provide a single, ≤80-word reaction starting with: Revisiting my earlier recommendation. Mention any key changes inline, without bullet points. Respond ONLY in valid JSON with key "summary".`;
 
   try {
     const responseText = await callGemini(buildPrompt({
@@ -213,8 +201,6 @@ app.post('/api/agent1/revisit', async (req, res) => {
     const result = extractJson(responseText);
     const payload = {
       summary: result.summary || '',
-      bullets: ensureArray(result.bullets),
-      changes: ensureArray(result.changes),
       fields: normalizeFields(result.fields)
     };
 

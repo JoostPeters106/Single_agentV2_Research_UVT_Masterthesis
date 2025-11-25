@@ -148,7 +148,6 @@ async function executeFlow() {
       heading: 'Recommendation',
       reply: null,
       summary: `My initial suggestion is ${baseSummary}`,
-      bullets: agent1.bullets,
       allowCopy: true
     });
     const revisitTypingDone = showTyping('agent1', 2, {
@@ -158,21 +157,16 @@ async function executeFlow() {
     try {
       const revisit = await postJSON('/api/agent1/revisit', {
         question,
-        recommendation: { summary: baseSummary, bullets: agent1.bullets }
+        recommendation: { summary: baseSummary }
       });
       revisitTypingDone();
       revisitSucceeded = true;
-      const changeBullets = Array.isArray(revisit.changes) && revisit.changes.length
-        ? revisit.changes.map((item) => `Change: ${item}`)
-        : ['Change: No adjustments needed versus the initial plan.'];
-      const finalBullets = Array.isArray(revisit.bullets) ? revisit.bullets.map((item) => `Final recommendation: ${item}`) : [];
       addMessage({
         role: 'agent1',
         turn: 2,
         heading: 'Revisit',
         reply: null,
         summary: applyWordCap(revisit.summary, 80),
-        bullets: [...changeBullets, ...finalBullets],
         allowCopy: true
       });
     } catch (error) {
@@ -196,176 +190,6 @@ async function executeFlow() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function summarizePriorities(bullets = []) {
-  const items = Array.isArray(bullets) ? bullets.filter(Boolean).slice(0, 3) : [];
-  if (!items.length) return '';
-  if (items.length === 1) return items[0];
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  const head = items.slice(0, -1).join(', ');
-  const tail = items[items.length - 1];
-  return `${head} and ${tail}`;
-}
-
-function buildRevisitSummary(baseSummary = '', bullets = [], changeList) {
-  const trimmedSummary = baseSummary.trim();
-  const changeListSafe = Array.isArray(changeList) ? changeList : buildRevisitChanges(bullets, baseSummary);
-  const hasChanges = changeListSafe.length > 0 &&
-    !changeListSafe.every((item) => item.toLowerCase().includes('no changes'));
-  const prioritized = summarizePriorities(bullets);
-  const swapDetail = extractSwapDetails(changeListSafe[0]);
-
-  if (trimmedSummary && hasChanges) {
-    if (swapDetail) {
-      const detail = swapDetail.reason ? ` ${swapDetail.reason}` : '';
-      return `After revisiting the recommendation, replace ${swapDetail.from} with ${swapDetail.to} to strengthen outreach.${detail}`;
-    }
-    const detail = prioritized ? ` Key adjustments touch on ${prioritized}.` : '';
-    return `After revisiting the recommendation, keep it intact but apply the change list to sharpen execution.${detail}`;
-  }
-  if (trimmedSummary) {
-    return 'After reviewing the recommendation, it remains solid and should stay the same; no changes are necessary.';
-  }
-  if (hasChanges) {
-    return 'Revisit complete: the original advice stands, with targeted adjustments listed below to strengthen it.';
-  }
-  return 'Revisit complete: the prior recommendation stands without changes.';
-}
-
-function extractSwapDetails(changeText = '') {
-  if (!changeText) return null;
-  const swapMatch = changeText.match(/(?:Swap|Replace)\s+([^\s]+(?:\s[^\s]+)*)\s+(?:for|with)\s+([^\s]+(?:\s[^\s.]+)*)/i);
-  if (!swapMatch) return null;
-  const [, fromRaw, toRaw] = swapMatch;
-  const from = fromRaw.trim();
-  const to = toRaw.trim();
-  const reasonMatch = changeText.match(/because\s+(.+?)(?:\.|$)/i);
-  const reason = reasonMatch ? reasonMatch[1].trim() : '';
-  return { from, to, reason };
-}
-
-function buildRevisitChanges(bullets = [], baseSummary = '') {
-  const bulletList = Array.isArray(bullets) ? bullets.filter(Boolean) : [];
-  const recommended = extractRecommendedCustomers(bulletList, baseSummary, customerDataset.names);
-  const swapPlan = proposeCustomerSwap(recommended, customerDataset.records);
-
-  if (swapPlan) {
-    const changeDetail = buildSwapChangeText(swapPlan);
-    const contactPlan = buildContactPlan(recommended, swapPlan, customerDataset.records);
-    return [`Change 1: ${changeDetail}`, contactPlan];
-  }
-
-  const fallbackSwap = buildFallbackSwap(customerDataset.records);
-  const contactPlan = buildContactPlan(recommended, null, customerDataset.records);
-  return [`Change 1: ${fallbackSwap}`, contactPlan];
-}
-
-function extractRecommendedCustomers(bullets = [], baseSummary = '', knownNames = []) {
-  const textPool = [baseSummary, ...bullets].filter(Boolean).join(' ').toLowerCase();
-  if (!textPool || !knownNames.length) return [];
-  return knownNames.filter((name) => textPool.includes(name.toLowerCase()));
-}
-
-function proposeCustomerSwap(recommendedNames = [], records = []) {
-  const scoredRecords = scoreAndSortRecords(records);
-  if (!scoredRecords.length) return null;
-
-  const recommendedSet = new Set(recommendedNames);
-  const currentTarget = recommendedNames.find((name) => name) || scoredRecords[0]?.name;
-  const replacement = scoredRecords.find((item) => item.name !== currentTarget && !recommendedSet.has(item.name));
-
-  if (!currentTarget || !replacement) return null;
-
-  const currentRecord = scoredRecords.find((item) => item.name === currentTarget);
-  const reasonParts = [];
-  if (replacement.ytd && (!currentRecord || replacement.ytd > (currentRecord.ytd || 0))) {
-    reasonParts.push(`higher YTD spend (€${formatCurrency(replacement.ytd)}` +
-      (currentRecord && currentRecord.ytd ? ` vs €${formatCurrency(currentRecord.ytd)}` : '') + ')');
-  }
-  if (replacement.growth && (!currentRecord || replacement.growth > (currentRecord.growth || 0))) {
-    reasonParts.push(`stronger growth (${replacement.growth}% vs ${currentRecord?.growth || 'prior pick'})`);
-  }
-
-  const reason = reasonParts.length ? ` because of ${reasonParts.join(' and ')}` : '';
-  return { from: currentTarget, to: replacement.name, reason };
-}
-
-function buildSwapChangeText({ from, to, reason } = {}) {
-  const detail = reason ? `${reason}.` : ' to target a stronger opportunity.';
-  return `Replace ${from} with ${to}${detail}`;
-}
-
-function buildContactPlan(recommendedNames = [], swapPlan, records = []) {
-  const scoredRecords = scoreAndSortRecords(records);
-  const baseline = recommendedNames.length
-    ? recommendedNames.filter(Boolean)
-    : scoredRecords.slice(0, 3).map((item) => item.name);
-
-  const adjusted = baseline.map((name) =>
-    swapPlan && swapPlan.from && swapPlan.to && name === swapPlan.from ? swapPlan.to : name
-  );
-
-  if (swapPlan && swapPlan.to && !adjusted.includes(swapPlan.to)) {
-    adjusted.unshift(swapPlan.to);
-  }
-
-  const uniqueLineup = Array.from(new Set(adjusted.filter(Boolean))).slice(0, 3);
-  const contactsText = summarizePriorities(uniqueLineup);
-
-  if (!contactsText) {
-    return 'Contact the top potential customers identified in the dataset.';
-  }
-
-  if (uniqueLineup.length === 1) {
-    return `Contact ${contactsText}.`;
-  }
-
-  return `Contact customers ${contactsText}.`;
-}
-
-function buildFallbackSwap(records = []) {
-  const scoredRecords = scoreAndSortRecords(records);
-  if (!scoredRecords.length) {
-    return 'Replace one existing customer with a higher-potential name from the dataset to ensure a tangible change.';
-  }
-
-  const [topPick, runnerUp] = scoredRecords;
-  if (topPick && runnerUp) {
-    const reasonParts = [];
-    if (runnerUp.ytd && runnerUp.ytd !== topPick.ytd) {
-      reasonParts.push(`higher YTD spend (€${formatCurrency(runnerUp.ytd)}` +
-        (topPick.ytd ? ` vs €${formatCurrency(topPick.ytd)}` : '') + ')');
-    }
-    if (runnerUp.growth && runnerUp.growth !== topPick.growth) {
-      reasonParts.push(`growth upside (${runnerUp.growth}% vs ${topPick.growth || 'prior pick'})`);
-    }
-    const reason = reasonParts.length ? ` because of ${reasonParts.join(' and ')}` : '';
-    return `Replace ${topPick.name} with ${runnerUp.name}${reason}.`;
-  }
-
-  return `Replace ${topPick.name} with another high-potential customer from the dataset to introduce a clear change.`;
-}
-
-function scoreAndSortRecords(records = []) {
-  return (Array.isArray(records) ? records : [])
-    .map((record) => ({
-      name: record['Company Name'],
-      ytd: parseEuro(record['YTD Purchase Amount (€)']),
-      growth: parseFloat(record['Yearly Revenue Growth Rate (%)']) || 0
-    }))
-    .filter((item) => item.name)
-    .sort((a, b) => (b.ytd || 0) - (a.ytd || 0) || (b.growth || 0) - (a.growth || 0));
-}
-
-function parseEuro(value = '') {
-  if (!value) return 0;
-  const numeric = String(value).replace(/[^\d.,-]/g, '').replace(/,/g, '.');
-  return parseFloat(numeric) || 0;
-}
-
-function formatCurrency(amount = 0) {
-  return amount.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 function resetChat({ message } = {}) {
@@ -425,7 +249,7 @@ function showTyping(role, turn, { label: customLabel } = {}) {
   };
 }
 
-function addMessage({ role, turn, heading, reply, summary, bullets = [], allowCopy = false }) {
+function addMessage({ role, turn, heading, reply, summary, allowCopy = false }) {
   ensureChatReady();
   const info = ROLE_INFO[role] || ROLE_INFO.agent1;
 
@@ -467,7 +291,7 @@ function addMessage({ role, turn, heading, reply, summary, bullets = [], allowCo
 
   bubble.appendChild(header);
 
-  const body = buildMessageBody(summary, bullets);
+  const body = buildMessageBody(summary);
   bubble.appendChild(body);
 
   row.appendChild(bubble);
@@ -477,25 +301,13 @@ function addMessage({ role, turn, heading, reply, summary, bullets = [], allowCo
 
 }
 
-function buildMessageBody(summary = '', bullets = []) {
+function buildMessageBody(summary = '') {
   const container = document.createElement('div');
   container.className = 'body';
   const safeSummary = summary && summary.trim().length > 0 ? summary.trim() : 'No summary provided.';
   const paragraph = document.createElement('p');
   paragraph.textContent = safeSummary;
   container.appendChild(paragraph);
-
-  const bulletList = Array.isArray(bullets) ? bullets.filter(Boolean) : [];
-  if (bulletList.length) {
-    const ul = document.createElement('ul');
-    bulletList.forEach((item) => {
-      const li = document.createElement('li');
-      li.textContent = item;
-      ul.appendChild(li);
-    });
-    container.appendChild(ul);
-  }
-
   return container;
 }
 
