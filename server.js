@@ -8,7 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 3001;
-const DEFAULT_GEMINI_API_KEY = 'api';
+const DEFAULT_GEMINI_API_KEY = 'AIzaSyDMx1inI8w4HPq1IGRMa4bX54tbAvxwxw0';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -34,7 +34,7 @@ const geminiClient = apiKey && baseUrl
       },
     })
   : null;
-const SYSTEM_CONTEXT = "you are assisting in an academic experiment. the user is a sales employee at brightwave solutions. your outputs must be short (≤80 words), strictly about which customers to contact first using only the provided dataset. justify briefly using concrete fields from the data (e.g., ‘last sale=1 mo’, ‘ytd=€400k’, ‘freq=8/yr’, notes etc.). Do not mention the customerID. avoid unrelated topics. ensure fairness; do not rely on stereotypes. be transparent and cite which fields informed your choice.";
+const SYSTEM_CONTEXT = "you are assisting in an academic experiment. the user is a sales employee at brightwave solutions. your outputs must be short (Around 80 words), strictly about which customers to contact first using only the provided dataset. justify briefly using concrete fields from the data (e.g., ‘last sale=1 mo’, ‘ytd=€400k’, ‘freq=8/yr’, notes etc.). Do not mention the customerID. avoid unrelated topics. ensure fairness; do not rely on stereotypes. be transparent and cite which fields informed your choice.";
 const TARGET_QUERY = "Based on the data, determine which customers have the most potential and should be contacted first.";
 
 const app = express();
@@ -159,7 +159,7 @@ app.post('/api/agent1', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with key "summary" (≤80 words). Provide a single concise reaction about which customers to contact first, referencing dataset fields inline without bullet points.  Do not mention the customerID.`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nRespond ONLY in valid JSON with key "summary" (around 80 words). Provide a single concise reaction about which customers to contact first, referencing dataset fields inline without bullet points.  Do not mention the customerID.`;
 
   try {
     const responseText = await callGemini(buildPrompt({
@@ -194,7 +194,7 @@ app.post('/api/agent1/revisit', async (req, res) => {
   try {
     const responseText = await callGemini(buildPrompt({
       role: 'data-driven sales recommender',
-      instruction: 'revisit the initial plan and refine it using the dataset and user question. Explain why you would remove a customer or add one',
+      instruction: 'revisit the initial plan and refine it using the dataset and user question. IMPORTANT: At least remove one customer or add one. Do no more than adding one and removing one. Explicitly state which customer you removed and or added (use the words: removed or/and added). Shortly substentiate why ',
       body
     }));
 
