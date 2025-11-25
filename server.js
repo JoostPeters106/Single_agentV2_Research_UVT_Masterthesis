@@ -189,12 +189,12 @@ app.post('/api/agent1/revisit', async (req, res) => {
     return res.status(400).json({ message: 'Question is required.' });
   }
 
-  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\n\nRevisit the advice and provide a single, ≤80-word reaction starting with: Revisiting my earlier recommendation. Mention any key changes inline, without bullet points. Respond ONLY in valid JSON with key "summary".`;
+  const body = `Dataset (CSV):\n${datasetText}\n\nUser request: ${question}\n\nInitial recommendation summary: ${summary}\n\nRevisit the advice and provide a single, ≤90-word reaction starting with: Revisiting my earlier recommendation. Mention and substantiate any key changes inline, without bullet points. Respond ONLY in valid JSON with key "summary".`;
 
   try {
     const responseText = await callGemini(buildPrompt({
       role: 'data-driven sales recommender',
-      instruction: 'revisit the initial plan and refine it using the dataset and user question.',
+      instruction: 'revisit the initial plan and refine it using the dataset and user question. Explain why you would remove a customer or add one',
       body
     }));
 
