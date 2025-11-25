@@ -370,19 +370,30 @@ button.ghost:hover:not(:disabled) {
 
 .deltas {
   margin-top: 0.75rem;
-  padding-left: 1.1rem;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.deltas li {
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .deltas li.added {
   color: var(--ok);
+  border: 1px solid rgba(22, 163, 74, 0.2);
+  background: rgba(22, 163, 74, 0.08);
 }
 
 .deltas li.removed {
   color: var(--warn);
-}
-
-.deltas li.reordered {
-  color: #475569;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .msg.system .bubble {

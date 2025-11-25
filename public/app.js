@@ -4,6 +4,7 @@ const chatThread = document.getElementById('chat-thread');
 const chatForm = document.getElementById('chat-bar');
 const restartButton = document.getElementById('restartFlow');
 const customerDataset = { records: [], names: [] };
+const turnSnapshots = { initial: '', revised: '' };
 const datasetReady = loadCustomers();
 
 async function loadCustomers() {
@@ -142,6 +143,8 @@ async function executeFlow() {
     typing1Done();
     const cappedSummary = applyWordCap(agent1.summary, 80);
     const baseSummary = cappedSummary || 'no recommendations available at this time.';
+    turnSnapshots.initial = baseSummary;
+    turnSnapshots.revised = '';
     addMessage({
       role: 'agent1',
       turn: 1,
@@ -161,13 +164,16 @@ async function executeFlow() {
       });
       revisitTypingDone();
       revisitSucceeded = true;
+      const revisitSummary = applyWordCap(revisit.summary, 80);
+      turnSnapshots.revised = revisitSummary;
       addMessage({
         role: 'agent1',
         turn: 2,
         heading: 'Revisit',
         reply: null,
-        summary: applyWordCap(revisit.summary, 80),
-        allowCopy: true
+        summary: revisitSummary,
+        allowCopy: true,
+        showDelta: true
       });
     } catch (error) {
       console.error(error);
@@ -190,6 +196,69 @@ async function executeFlow() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeCustomerName(name = '') {
+  return name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function extractCustomers(text = '') {
+  if (!text) return [];
+  const normalizedText = normalizeCustomerName(text);
+  const seen = new Set();
+
+  return customerDataset.names
+    .map((name) => ({
+      canonical: normalizeCustomerName(name),
+      display: name
+    }))
+    .filter(({ canonical, display }) => {
+      if (!canonical || seen.has(canonical)) return false;
+      const found = normalizedText.includes(canonical);
+      if (found) {
+        seen.add(canonical);
+      }
+      return found && Boolean(display);
+    });
+}
+
+function renderDelta(initialText = '', revisedText = '') {
+  const initial = extractCustomers(initialText);
+  const revised = extractCustomers(revisedText);
+
+  const initialMap = new Map(initial.map(({ canonical, display }) => [canonical, display]));
+  const revisedMap = new Map(revised.map(({ canonical, display }) => [canonical, display]));
+
+  const added = Array.from(revisedMap.entries())
+    .filter(([canonical]) => !initialMap.has(canonical))
+    .map(([, display]) => display);
+  const removed = Array.from(initialMap.entries())
+    .filter(([canonical]) => !revisedMap.has(canonical))
+    .map(([, display]) => display);
+
+  if (!added.length && !removed.length) {
+    return null;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'deltas';
+
+  const deltas = [
+    ...removed.map((name) => ({ className: 'removed', label: `Removed: ${name}` })),
+    ...added.map((name) => ({ className: 'added', label: `Added: ${name}` }))
+  ];
+
+  deltas.forEach(({ className, label }) => {
+    const li = document.createElement('li');
+    li.className = className;
+    li.textContent = label;
+    list.appendChild(li);
+  });
+
+  return list;
 }
 
 function resetChat({ message } = {}) {
@@ -249,7 +318,7 @@ function showTyping(role, turn, { label: customLabel } = {}) {
   };
 }
 
-function addMessage({ role, turn, heading, reply, summary, allowCopy = false }) {
+function addMessage({ role, turn, heading, reply, summary, allowCopy = false, showDelta = false }) {
   ensureChatReady();
   const info = ROLE_INFO[role] || ROLE_INFO.agent1;
 
@@ -293,6 +362,13 @@ function addMessage({ role, turn, heading, reply, summary, allowCopy = false }) 
 
   const body = buildMessageBody(summary);
   bubble.appendChild(body);
+
+  if (showDelta) {
+    const deltaEl = renderDelta(turnSnapshots.initial, turnSnapshots.revised);
+    if (deltaEl) {
+      bubble.appendChild(deltaEl);
+    }
+  }
 
   row.appendChild(bubble);
   chatThread.appendChild(row);
