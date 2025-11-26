@@ -8,7 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 3001;
-const DEFAULT_GEMINI_API_KEY = 'AIzaSyDMx1inI8w4HPq1IGRMa4bX54tbAvxwxw0';
+const DEFAULT_GEMINI_API_KEY = 'API';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -84,12 +84,18 @@ async function callGemini(prompt) {
   if (!geminiClient || !model) {
     throw new Error('Model configuration missing. Check environment variables.');
   }
-
+  await new Promise(resolve => setTimeout(resolve, 750));
   console.log('Prompt sent to model:\n', prompt);
 
   const response = await geminiClient.models.generateContent({
     model,
     contents: prompt,
+    // --- HIER VOEG JE DE LIMIET TOE ---
+    config: {
+      maxOutputTokens: 250, // Ruim genoeg voor 100 woorden + JSON syntax
+      temperature: 0.0,     // Zorgt voor consistente, maar niet robotische antwoorden
+    }
+    // ----------------------------------
   });
 
   const text = (response.text || '').trim();
