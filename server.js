@@ -8,7 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 3001;
-const DEFAULT_GEMINI_API_KEY = 'API';
+const DEFAULT_GEMINI_API_KEY = 'AIzaSyAAet2eI5QwN8LswUFqIR_4-d92U9YC-OE';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -84,25 +84,56 @@ async function callGemini(prompt) {
   if (!geminiClient || !model) {
     throw new Error('Model configuration missing. Check environment variables.');
   }
-  await new Promise(resolve => setTimeout(resolve, 750));
-  console.log('Prompt sent to model:\n', prompt);
 
-  const response = await geminiClient.models.generateContent({
-    model,
-    contents: prompt,
-    // --- HIER VOEG JE DE LIMIET TOE ---
-    config: {
-      maxOutputTokens: 250, // Ruim genoeg voor 100 woorden + JSON syntax
-      temperature: 0.0,     // Zorgt voor consistente, maar niet robotische antwoorden
+  // Instellingen voor het opnieuw proberen
+  let delay = 2000;       // Start met 2 seconden wachten
+  const maxDelay = 20000; // Wacht nooit langer dan 60 seconden per keer
+
+  // Oneindige loop: blijft proberen tot succes of een fatale andere error
+  while (true) {
+    try {
+      console.log('Prompt sent to model (Sending...):');
+
+      const response = await geminiClient.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          maxOutputTokens: 250,
+          temperature: 0.0,
+        }
+      });
+
+      // Als we hier komen, is het gelukt!
+      const text = (response.text || '').trim();
+      console.log('Model response:\n', text);
+      
+      return text; // Dit breekt de loop en geeft antwoord terug
+
+    } catch (error) {
+      // Check of het de 503 'Overloaded' error is
+      const isOverloaded = error.message.includes('503') || 
+                           error.message.includes('500') || 
+                           error.message.includes('overloaded') ||
+                           error.message.includes('overloaded') ||
+                           error.message.includes('internal error'); // Soms ook 500
+
+      if (isOverloaded) {
+        console.warn(`⚠️ Server overload (503). Wacht ${delay / 1000} seconden en probeer opnieuw...`);
+        
+        // Wacht de berekende tijd
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        // Verdubbel de wachttijd voor de volgende keer (Exponential Backoff)
+        // Math.min zorgt dat hij nooit boven de 60 seconden (maxDelay) uitkomt
+        delay = Math.min(delay * 2, maxDelay);
+      } else {
+        // Is het een andere error (bijv. Invalid Argument of Safety)?
+        // Dan stoppen we direct, want opnieuw proberen heeft dan geen zin.
+        console.error("Fatale error (geen 503):", error);
+        throw error;
+      }
     }
-    // ----------------------------------
-  });
-
-  const text = (response.text || '').trim();
-
-  console.log('Model response:\n', text);
-
-  return text;
+  }
 }
 
 function extractJson(text) {
